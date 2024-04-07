@@ -19,3 +19,9 @@ def set_next_cell(text, code=True, replace=False, execute=False):
         text=text, ctype='code' if code else 'markdown'))
 ```
 
+## Installation
+
+```
+pip install meta-nbextension
+```
+
