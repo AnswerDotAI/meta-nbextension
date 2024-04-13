@@ -22,7 +22,8 @@ def receive_nbmeta(data):
                             outputData.name = output.name;
                             outputData.text = output.text;
                         } else if (output.output_type === 'execute_result' || output.output_type === 'display_data') {
-                            if (output.data['text/plain']) { outputData.data = output.data['text/plain']; }
+                            if (output.data['text/markdown'])   { outputData.data = output.data['text/markdown']; }
+                            else if (output.data['text/plain']) { outputData.data = output.data['text/plain']; }
                         }
                         return outputData;
                     });
