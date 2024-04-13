@@ -1,19 +1,41 @@
 define([ 'base/js/namespace', 'base/js/events', 'notebook/js/notebook', 'notebook/js/codecell' ],
 function(Jupyter, events, notebook, codecell) {
     function patchCodeCellExecute() {
-        var originalExecute = codecell.CodeCell.prototype.execute;
-        codecell.CodeCell.prototype.execute = function() {
+        var proto = codecell.CodeCell.prototype;
+        var orig = proto.execute;
+        if (orig.isPatched) { return; }
+        proto.execute = function() {
             var code = `from IPython import get_ipython
 def receive_nbmeta(data):
     nbmeta = get_ipython().user_ns.setdefault('nbmeta', {})
-    nbmeta['cell'] = data['cellIndex']
-    nbmeta['name'] = data['notebookName']`;
-            Jupyter.notebook.kernel.execute( code);
-            var cellIndex = Jupyter.notebook.find_cell_index(this);
-            var data = { cellIndex: cellIndex, notebookName: Jupyter.notebook.notebook_name };
-            Jupyter.notebook.kernel.execute(`receive_nbmeta(${JSON.stringify(data)})`);
-            originalExecute.apply(this, arguments);
+    nbmeta['idx'] = data['idx']
+    nbmeta['cells'] = data['cells']
+    nbmeta['name'] = data['name']`;
+            nb = Jupyter.notebook;
+            nb.kernel.execute( code);
+            var cellsData = nb.get_cells().map(cell => {
+                var cellData = { cell_type: cell.cell_type, source: cell.get_text() };
+                if (cell.cell_type === 'code') {
+                    cellData.outputs = cell.output_area.outputs.map(output => {
+                        var outputData = { output_type: output.output_type };
+                        if (output.output_type === 'stream') {
+                            outputData.name = output.name;
+                            outputData.text = output.text;
+                        } else if (output.output_type === 'execute_result' || output.output_type === 'display_data') {
+                            if (output.data['text/plain']) { outputData.data = output.data['text/plain']; }
+                        }
+                        return outputData;
+                    });
+                }
+                return cellData;
+            });
+            var data = { idx: nb.find_cell_index(this), name: nb.notebook_name, cells: cellsData};
+            try       { var serialized = JSON.stringify(data); }
+            catch (e) { console.error('Failed to serialize cell data:', e); }
+            nb.kernel.execute(`receive_nbmeta(${serialized})`);
+            orig.apply(this, arguments);
         };
+        proto.execute.isPatched = true;
     }
 
     function patchSetNextInput() {
